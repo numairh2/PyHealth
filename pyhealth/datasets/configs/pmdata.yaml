@@ -1,0 +1,35 @@
+version: "1.0"
+tables:
+  pmdata_hourly:
+    file_path: "pmdata-hourly.csv"
+    patient_id: "patient_id"
+    timestamp: "timestamp"
+    timestamp_format: "%Y-%m-%d %H:%M:%S"
+    attributes:
+      - "heart_rate"
+      - "steps"
+      - "calories"
+      - "distance"
+
+  pmdata_daily:
+    file_path: "pmdata-daily.csv"
+    patient_id: "patient_id"
+    timestamp: "timestamp"
+    timestamp_format: "%Y-%m-%d"
+    attributes:
+      - "fatigue"
+      - "mood"
+      - "readiness"
+      - "sleep_duration_h"
+      - "sleep_quality"
+      - "soreness"
+      - "stress"
+
+  pmdata_static:
+    file_path: "pmdata-static.csv"
+    patient_id: "patient_id"
+    timestamp: null
+    attributes:
+      - "age"
+      - "height"
+      - "gender"
