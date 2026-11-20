@@ -117,4 +117,3 @@ from .mira import (
 )
 from .clip_pretraining import ClipMultimodalEncoderPretraining
 from .clip_finetune import ClipFinetuneStressPrediction
-from .resnet1d import ResNet1D

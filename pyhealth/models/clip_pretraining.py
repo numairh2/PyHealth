@@ -37,7 +37,7 @@ class ClipMultimodalEncoderPretraining(BaseModel):
         in_channels: int = 1,
         tabular_hidden_size: int = 128,
         proj_dim: int = 128,
-        temperature: float = 0.07,
+        temperature: float = 0.07
     ):
         super().__init__(dataset=dataset)
         self.temperature = float(temperature)
@@ -65,7 +65,7 @@ class ClipMultimodalEncoderPretraining(BaseModel):
         summed = (embeddings * weights).sum(dim=1)
         return summed / weights.sum(dim=1).clamp(min=1.0)
 
-    def constrastive_loss(
+    def contrastive_loss(
         self,
         text_projection: torch.Tensor,
         combined_projection: torch.Tensor,
@@ -79,8 +79,8 @@ class ClipMultimodalEncoderPretraining(BaseModel):
         loss_s2t = nn.functional.cross_entropy(logits.T, labels)
         return 0.5 * (loss_t2s + loss_s2t)
 
-    def forward(self, **kwargs: Any) -> dict[str, torch.Tensor]:
-        """Forward pass using StressPredictionPMData batch keys."""
+    def encode(self, **kwargs: Any) -> torch.Tensor:
+        """Encode the input data into a combined projection."""
         heart_rate = kwargs["heart_rate"].to(self.device)
         steps = kwargs["steps"].to(self.device)
         calories = kwargs["calories"].to(self.device)
@@ -89,14 +89,12 @@ class ClipMultimodalEncoderPretraining(BaseModel):
         static = kwargs["static"].to(self.device)
         texts = kwargs["texts"]
 
-        # (B, T, 4) for TransformerLayer; replace NaNs from missing hours/channels
         time_series = torch.stack(
             [heart_rate, steps, calories, distance], dim=-1
         )
         time_series = torch.nan_to_num(time_series, nan=0.0)
         _, time_series_encoding = self.time_series_encoder(time_series)
 
-        # (B, 1, 9) for ResNet1D with in_channels=1
         tabular = torch.cat([wellness, static], dim=-1)
         tabular = torch.nan_to_num(tabular, nan=0.0).unsqueeze(1)
         tabular_encoding = self.tabular_encoder(tabular)
@@ -104,11 +102,17 @@ class ClipMultimodalEncoderPretraining(BaseModel):
         combined_embedding = torch.cat(
             (time_series_encoding, tabular_encoding), dim=-1
         )
+        combined_projection = self.seq_proj_head(combined_embedding)
+        return combined_projection
+
+    def forward(self, **kwargs: Any) -> dict[str, torch.Tensor]:
+        """Forward pass using StressPredictionPMData batch keys."""
+        texts = kwargs["texts"]
         text_embeddings = self.generate_text_embeddings(texts)
         text_projection = self.txt_proj_head(text_embeddings)
-        combined_projection = self.seq_proj_head(combined_embedding)
+        combined_projection = self.encode(**kwargs)
 
-        loss = self.constrastive_loss(text_projection, combined_projection)
+        loss = self.contrastive_loss(text_projection, combined_projection)
         results: dict[str, torch.Tensor] = {
             "loss": loss,
             "text_projection": text_projection,

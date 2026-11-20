@@ -49,24 +49,31 @@ class BasicBlock(nn.Module):
         self.conv2 = nn.Conv1d(out_channels, out_channels, 3, stride=1, padding=1, bias=False)
         self.bn2 = nn.BatchNorm1d(out_channels)
 
-        self.shortcut = nn.Sequential(
-            nn.Conv1d(in_channels, out_channels, 1, stride=2, bias=False),
-            nn.BatchNorm1d(out_channels)
-        )
+        if downsample:
+            self.shortcut = nn.Sequential(
+                nn.Conv1d(in_channels, out_channels, 1, stride=2, bias=False),
+                nn.BatchNorm1d(out_channels)
+            )
+        else:
+            self.shortcut = nn.Sequential(
+                nn.Conv1d(in_channels, out_channels, 1, stride=1, bias=False),
+                nn.BatchNorm1d(out_channels)
+            )
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.downsample = downsample
 
     def forward(self, x):
+        identity = x
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.conv2(x)
         out = self.bn2(x)
         if self.downsample or self.in_channels != self.out_channels:
-            out = self.shortcut(out)
+            out = out + self.shortcut(identity)
         else:
-            out = out + x
+            out = out + identity
         out = self.relu(out)
         return out
 
@@ -129,46 +136,11 @@ class ResNet1D(nn.Module):
 # PyHealth model stencil
 # ---------------------------------------------------------------------------
 
-class ResNet1DModel(BaseModel):
-    """PyHealth stencil wrapping :class:`ResNet1D`.
-
-    Expects a single timeseries / tensor feature shaped
-    ``(batch, channels, seq_len)`` (or ``(batch, seq_len, channels)`` if
-    ``channels_last=True``).
-
-    Fill in / adjust:
-      - ``feature_key``: which dataset field holds the 1D signal
-      - channel layout (channels_first vs channels_last)
-      - ResNet hyperparameters below
-    """
-
-    def __init__(
-        self,
-        classes:int,
-        in_channels: int = 12
-    ):
-        super().__init__()
-        self.resnet1d = ResNet1D(
-            in_channels,
-            classes
-        )
-        
-    def forward(self, x):
-        return self.resnet1d(x)
-
-        
-
-
 if __name__ == "__main__":
     # Smoke test the backbone only (no PyHealth dataset required)
     net = ResNet1D(
-        in_channels=12,
-        base_filters=32,
-        kernel_size=16,
-        stride=2,
-        groups=1,
-        n_block=4,
-        n_classes=5,
+        classes=5,
+        in_channels=12
     )
-    y = net(torch.randn(2, 12, 1000))
-    print("ResNet1D out:", y.shape)  # (2, 5)
+    y = net.forward(torch.randn(2, 12, 1000))
+    print("ResNet1DModel out:", y.shape)  # (2, 5)
