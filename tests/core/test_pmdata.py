@@ -6,9 +6,11 @@ import shutil
 import tempfile
 import unittest
 
+import numpy as np
 import pandas as pd
 
 from pyhealth.datasets import PMDataDataset
+from pyhealth.tasks import StressPredictionPMData
 
 WELLNESS_HEADER = (
     "effective_time_frame,fatigue,mood,readiness,sleep_duration_h,"
@@ -168,6 +170,35 @@ class TestPMDataDataset(unittest.TestCase):
     def test_unknown_patient_raises(self):
         with self.assertRaises(AssertionError):
             self.dataset.get_patient("p99")
+
+    def test_stress_prediction_daily_samples(self):
+        task = StressPredictionPMData(stress_threshold=4)
+        samples = task(self.dataset.get_patient("p01"))
+
+        # Hourly Fitbit data exists only on 2019-11-01; 2019-11-02 is skipped
+        self.assertEqual(len(samples), 1)
+        sample = samples[0]
+        self.assertEqual(sample["patient_id"], "p01")
+        self.assertEqual(sample["record_id"], "2019-11-01")
+        self.assertEqual(sample["stress"], 1)  # wellness stress 4 >= 4
+        self.assertEqual(list(sample["heart_rate"]), [61.0, 70.0])
+        self.assertEqual(list(sample["steps"]), [20.0, 5.0])
+        self.assertEqual(sample["heart_rate"].dtype, np.dtype("float32"))
+        # fatigue, mood, readiness, sleep_duration_h, sleep_quality, soreness
+        self.assertEqual(list(sample["wellness"]), [3.0, 3.0, 5.0, 7.0, 3.0, 2.0])
+        self.assertEqual(sample["wellness"].shape, (6,))
+        # age, height, gender (male -> 0)
+        self.assertEqual(list(sample["static"]), [48.0, 195.0, 0.0])
+        self.assertEqual(sample["static"].shape, (3,))
+
+        p02 = task(self.dataset.get_patient("p02"))
+        self.assertEqual(len(p02), 1)
+        self.assertEqual(p02[0]["stress"], 0)  # wellness stress 1 < 4
+        self.assertEqual(list(p02[0]["static"]), [60.0, 180.0, 0.0])
+
+        p03 = task(self.dataset.get_patient("p03"))
+        self.assertEqual(len(p03), 1)
+        self.assertTrue(np.isnan(p03[0]["static"]).all())  # missing overview row
 
 
 class TestPMDataDatasetErrors(unittest.TestCase):
