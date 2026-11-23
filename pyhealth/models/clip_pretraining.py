@@ -96,7 +96,7 @@ class ClipMultimodalEncoderPretraining(BaseModel):
         _, time_series_encoding = self.time_series_encoder(time_series)
 
         tabular = torch.cat([wellness, static], dim=-1)
-        tabular = torch.nan_to_num(tabular, nan=0.0).unsqueeze(1)
+        tabular = torch.nan_to_num(tabular, nan=-1.0).unsqueeze(1)
         tabular_encoding = self.tabular_encoder(tabular)
 
         combined_embedding = torch.cat(
