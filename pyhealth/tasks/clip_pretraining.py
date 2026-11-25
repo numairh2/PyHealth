@@ -1,11 +1,4 @@
-"""Daily stress prediction on PMData Fitbit and wellness reports.
-
-Each sample is one calendar day with a wellness report. That day's hourly
-Fitbit series (heart rate, steps, calories, distance) are returned as
-float tensors, and the other daily wellness fields (excluding stress) as a
-tabular vector. Hours with no Fitbit data are omitted, matching
-:class:`~pyhealth.datasets.PMDataDataset`.
-"""
+"""Daily stress prediction and contrastive pretraining on PMData Fitbit days."""
 
 from __future__ import annotations
 
@@ -199,5 +192,77 @@ class StressPredictionPMData(BaseTask):
             # prompt generation
             sample = self.prompt_generation(sample)
             samples.append(sample)
+
+        return samples
+
+
+class PMDataPretraining(StressPredictionPMData):
+    """One unlabeled sample per Fitbit day, with 24 clock-hour slots per channel.
+
+    Index 0 is midnight. Unobserved hours and missing channel values are NaN.
+    The wellness vector and the text prompt use the available observations.
+    """
+
+    task_name: str = "PMDataPretraining"
+    output_schema: ClassVar[dict[str, str]] = {}
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        # BaseDataset includes instance attributes in the set_task cache key.
+        self.cache_version = "clock_hours_24_v1"
+
+    def __call__(self, patient: Any) -> list[dict[str, Any]]:
+        hourly_by_day = defaultdict(dict)
+        for event in patient.get_events(event_type="pmdata_hourly"):
+            if event.timestamp is None:
+                continue
+            day = event.timestamp.strftime("%Y-%m-%d")
+            hour = event.timestamp.hour
+            hours = hourly_by_day[day]
+            if hour in hours:
+                raise ValueError(f"Duplicate Fitbit hour for {patient.patient_id} on {day}.")
+            hours[hour] = event
+
+        reports_by_day = {}
+        for report in patient.get_events(event_type="pmdata_daily"):
+            if report.timestamp is None:
+                continue
+            day = report.timestamp.strftime("%Y-%m-%d")
+            reports_by_day[day] = report
+
+        static_events = patient.get_events(event_type="pmdata_static")
+        static_event = static_events[0] if static_events else None
+        static = np.asarray(
+            [
+                _static_value(name, getattr(static_event, name, None))
+                for name in STATIC_FEATURES
+            ],
+            dtype=np.float32,
+        )
+
+        samples = []
+        for day, hourly_events in sorted(hourly_by_day.items()):
+            report = reports_by_day.get(day)
+            wellness = np.asarray(
+                [
+                    _as_float(getattr(report, name, None))
+                    for name in DAILY_FEATURES
+                ],
+                dtype=np.float32,
+            )
+
+            sample = {
+                "patient_id": patient.patient_id,
+                "record_id": day,
+                "wellness": wellness,
+                "static": static.copy(),
+            }
+            for name in HOURLY_FEATURES:
+                values = np.full(24, np.nan, dtype=np.float32)
+                for hour, event in hourly_events.items():
+                    values[hour] = _as_float(getattr(event, name, None))
+                sample[name] = values
+
+            samples.append(self.prompt_generation(sample))
 
         return samples

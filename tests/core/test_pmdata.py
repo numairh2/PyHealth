@@ -11,6 +11,7 @@ import pandas as pd
 
 from pyhealth.datasets import PMDataDataset
 from pyhealth.tasks import StressPredictionPMData
+from pyhealth.tasks.clip_pretraining import PMDataPretraining
 
 WELLNESS_HEADER = (
     "effective_time_frame,fatigue,mood,readiness,sleep_duration_h,"
@@ -222,6 +223,29 @@ class TestPMDataDataset(unittest.TestCase):
     
    
 
+    def test_pretraining_keeps_fitbit_day_without_survey(self):
+        root = tempfile.mkdtemp(dir=self.temp_dir)
+        make_participant(
+            root,
+            "p01",
+            "2019-11-02T08:00:00.000Z,3,3,5,7,3,2,[],3\n",
+        )
+        make_overview(root)
+        dataset = PMDataDataset(
+            root=root,
+            cache_dir=os.path.join(self.temp_dir, "pretraining_cache"),
+        )
+        patient = dataset.get_patient("p01")
+        task = PMDataPretraining()
+        samples = task(patient)
+
+        self.assertEqual(len(samples), 1)
+        sample = samples[0]
+        self.assertEqual(sample["record_id"], "2019-11-01")
+
+        wellness = sample["wellness"]
+        self.assertEqual(wellness.shape, (6,)) # missing survey on 2019-11-01
+        self.assertTrue(np.isnan(wellness).all())
 
 class TestPMDataDatasetErrors(unittest.TestCase):
     def setUp(self):
