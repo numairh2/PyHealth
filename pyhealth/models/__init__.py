@@ -115,3 +115,5 @@ from .mira import (
     MIRAConfig as MIRAConfig,
     load_mira_checkpoint as load_mira_checkpoint,
 )
+from .clip_pretraining import ClipMultimodalEncoderPretraining
+from .clip_finetune import ClipFinetuneStressPrediction
