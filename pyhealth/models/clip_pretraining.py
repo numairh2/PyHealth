@@ -37,21 +37,24 @@ class ClipMultimodalEncoderPretraining(BaseModel):
         in_channels: int = 1,
         tabular_hidden_size: int = 128,
         proj_dim: int = 128,
-        temperature: float = 0.07
+        temperature: float = 0.07,
+        text_encoder_name: str = "bert-base-uncased",
     ):
         super().__init__(dataset=dataset)
         self.temperature = float(temperature)
         self.time_series_encoder = TransformerLayer(time_series_feature_size)
         self.tabular_encoder = ResNet1D(in_channels, tabular_hidden_size)
-        self.text_encoder = TextEmbedding(
-            model_name="bert-base-uncased",
-            embedding_dim=768,
-            return_mask=True,
-            freeze=True
-        )
-
-        for p in self.text_encoder.fc.parameters():
-            p.requires_grad = False
+        if text_encoder_name is None:
+            self.text_encoder = None
+        else:
+            self.text_encoder = TextEmbedding(
+                model_name=text_encoder_name,
+                embedding_dim=768,
+                return_mask=True,
+                freeze=True,
+            )
+            for p in self.text_encoder.fc.parameters():
+                p.requires_grad = False
         self.txt_proj_head = nn.Linear(768, proj_dim)
         self.seq_proj_head = nn.Linear(
             time_series_feature_size + tabular_hidden_size, proj_dim
@@ -108,7 +111,10 @@ class ClipMultimodalEncoderPretraining(BaseModel):
     def forward(self, **kwargs: Any) -> dict[str, torch.Tensor]:
         """Forward pass using StressPredictionPMData batch keys."""
         texts = kwargs["texts"]
-        text_embeddings = self.generate_text_embeddings(texts)
+        if self.text_encoder is not None:
+            text_embeddings = self.generate_text_embeddings(texts)
+        else:
+            text_embeddings = torch.zeros(len(texts), 768).to(self.device)
         text_projection = self.txt_proj_head(text_embeddings)
         combined_projection = self.encode(**kwargs)
 

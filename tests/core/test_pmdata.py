@@ -199,6 +199,28 @@ class TestPMDataDataset(unittest.TestCase):
         p03 = task(self.dataset.get_patient("p03"))
         self.assertEqual(len(p03), 1)
         self.assertTrue(np.isnan(p03[0]["static"]).all())  # missing overview row
+    
+    def test_text_present_in_sample(self):
+        task = StressPredictionPMData(stress_threshold=4)
+        samples = task(self.dataset.get_patient("p01"))
+        self.assertEqual(len(samples), 1)
+        sample = samples[0]
+        self.assertEqual(type(sample["text"]), str)
+        self.assertTrue("stress" not in sample["text"])
+        self.assertTrue("wellness" in sample["text"])
+        self.assertTrue("static" in sample["text"])
+        self.assertTrue("heart_rate" in sample["text"])
+        self.assertTrue("steps" in sample["text"])
+        self.assertTrue("calories" in sample["text"])
+        self.assertTrue("distance" in sample["text"])
+        self.assertTrue("wellness" in sample["text"])
+        self.assertTrue("static" in sample["text"])
+        self.assertTrue("heart_rate" in sample["text"])
+        self.assertTrue("steps" in sample["text"])
+        self.assertTrue("calories" in sample["text"])
+        self.assertTrue("distance" in sample["text"])
+    
+   
 
 
 class TestPMDataDatasetErrors(unittest.TestCase):

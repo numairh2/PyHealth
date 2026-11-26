@@ -569,4 +569,5 @@ Available Datasets
     datasets/pyhealth.datasets.VSACDataset
     datasets/pyhealth.datasets.splitter
     datasets/pyhealth.datasets.GoldTestSplit
+    datasets/pyhealth.datasets.PMDataDataset
     datasets/pyhealth.datasets.utils
